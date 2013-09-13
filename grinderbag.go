@@ -62,6 +62,13 @@ func (s *storage) set(key, val string) error {
 	return nil
 }
 
+func (s *storage) del(key string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	delete(s.m, key)
+}
+
 func (s *storage) get(key string) (string, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -91,7 +98,7 @@ func (s *storage) _get(key string) (string, bool) {
 func init() {
 	var expSec int
 
-	flag.IntVar(&expSec, "exp", 60, "specify item expiration")
+	flag.IntVar(&expSec, "exp", 120, "specify item expiration")
 	expirationSec = int64(expSec)
 
 	flag.IntVar(&listenPort, "l", 8091, "listen port")
@@ -133,6 +140,30 @@ func setHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "ok")
 }
 
+func delHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logger.Errorf("del error while reading from %v", r.RemoteAddr)
+		http.Error(w, "can't reading", http.StatusInternalServerError)
+		return
+	}
+
+	var query GetQuery
+	err = json.Unmarshal(b, &query)
+	if err != nil {
+		logger.Errorf("del error while unmarshaling / %v", r.RemoteAddr)
+		http.Error(w, "can't unmarshaling", http.StatusInternalServerError)
+		return
+	}
+
+	s.del(query.Key)
+
+	logger.Debugf("del success: %v / %v", query, r.RemoteAddr)
+	fmt.Fprintf(w, "ok")
+}
+
 func getHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -154,7 +185,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	val, ok := s.get(query.Key)
 	if !ok {
 		logger.Debugf("get success: %s NOT_FOUND / %v", query.Key, r.RemoteAddr)
-		fmt.Fprintf(w, "")
+		fmt.Fprintf(w, "None")
 	}
 
 	logger.Debugf("get success: %s(%v) / %v", query.Key, val, r.RemoteAddr)
@@ -171,6 +202,7 @@ func main() {
 
 	http.HandleFunc("/set", setHandler)
 	http.HandleFunc("/get", getHandler)
+	http.HandleFunc("/del", delHandler)
 
 	logger.Infof("starting server at port %d", listenPort)
 	logger.Infof("item will expired after %v seconds", expirationSec)

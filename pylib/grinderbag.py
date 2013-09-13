@@ -22,6 +22,17 @@ class GrinderBag:
 		else:
 			return False
 
+	def clear(self):
+		conn = httplib.HTTPConnection(self.host, self.port)
+		conn.request("POST", "/del", '{"key":"%s"}' % self.key)
+		resp = conn.getresponse()
+		ret = resp.read()
+
+		if ret == "ok":
+			return True
+		else:
+			return False
+
 	def sync(self):
 		conn = httplib.HTTPConnection(self.host, self.port)
 		now = dt.datetime.now()
@@ -31,7 +42,7 @@ class GrinderBag:
 			resp = conn.getresponse()
 			ret = resp.read()
 
-			if ret != "":
+			if ret != "None":
 				return ret
 
 			curr = dt.datetime.now()
